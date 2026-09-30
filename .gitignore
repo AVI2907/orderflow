@@ -1,0 +1,19 @@
+# Build output
+target/
+dist/
+node_modules/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.iml
+
+# Secrets and local env
+.env
+.env.*
+*.pem
+
+# Ephemeral AWS CLI snapshots
+frontend/current-dist-config.json
+frontend/updated-dist-config.json

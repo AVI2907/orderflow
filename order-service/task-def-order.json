@@ -1,0 +1,33 @@
+{
+  "family": "orderflow-order-task",
+  "networkMode": "bridge",
+  "requiresCompatibilities": ["EC2"],
+  "cpu": "256",
+  "memory": "400",
+  "containerDefinitions": [
+    {
+      "name": "order-service",
+      "image": "449629364716.dkr.ecr.us-east-1.amazonaws.com/orderflow-order-service:latest",
+      "portMappings": [
+        {
+          "containerPort": 8081,
+          "hostPort": 8081,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        {"name": "SPRING_PROFILES_ACTIVE", "value": "aws"}
+      ],
+      "essential": true,
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/orderflow-order",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "order",
+          "awslogs-create-group": "true"
+        }
+      }
+    }
+  ]
+}

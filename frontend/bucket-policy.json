@@ -1,0 +1,29 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowCloudFrontServicePrincipal",
+      "Effect": "Allow",
+      "Principal": { "Service": "cloudfront.amazonaws.com" },
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::orderflow-frontend-449629364716/*",
+      "Condition": {
+        "StringEquals": {
+          "AWS:SourceArn": "arn:aws:cloudfront::449629364716:distribution/E1V4XYIHWG3JT9"
+        }
+      }
+    },
+    {
+      "Sid": "AllowCloudFrontListBucket",
+      "Effect": "Allow",
+      "Principal": { "Service": "cloudfront.amazonaws.com" },
+      "Action": "s3:ListBucket",
+      "Resource": "arn:aws:s3:::orderflow-frontend-449629364716",
+      "Condition": {
+        "StringEquals": {
+          "AWS:SourceArn": "arn:aws:cloudfront::449629364716:distribution/E1V4XYIHWG3JT9"
+        }
+      }
+    }
+  ]
+}
