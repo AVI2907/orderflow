@@ -15,9 +15,15 @@ public record ProductResponse(
     Integer stockQuantity,
     String category,
     String imageUrl,
+    double averageRating,
+    long reviewCount,
     Instant createdAt
 ) {
     public static ProductResponse from(Product product) {
+        return from(product, RatingSummary.NONE);
+    }
+
+    public static ProductResponse from(Product product, RatingSummary rating) {
         return new ProductResponse(
             product.getId(),
             SellerResponse.from(product.getSeller()),
@@ -27,6 +33,8 @@ public record ProductResponse(
             product.getStockQuantity(),
             product.getCategory(),
             product.getImageUrl(),
+            Math.round(rating.average() * 10) / 10.0,
+            rating.count(),
             product.getCreatedAt()
         );
     }

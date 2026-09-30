@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { catalogApi } from '../api/client';
 import { useCart } from '../context/CartContext';
+import { Stars } from '../components/StarRating';
 import type { Product } from '../types';
 
 export function ProductsPage() {
@@ -20,13 +21,11 @@ export function ProductsPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  // Clear any pending timer if the page unmounts
   useEffect(() => () => window.clearTimeout(toastTimer.current), []);
 
   function handleAdd(product: Product) {
     addItem(product, 1);
     setToast(`${product.name} added to cart`);
-    // Restart the timer so rapid clicks keep the message visible
     window.clearTimeout(toastTimer.current);
     toastTimer.current = window.setTimeout(() => setToast(null), 2500);
   }
@@ -45,8 +44,21 @@ export function ProductsPage() {
       <div className="product-grid">
         {products.map((product) => (
           <div key={product.id} className="product-card">
-            <h3>{product.name}</h3>
-            <p className="desc">{product.description}</p>
+            <Link to={`/item/${product.id}`} className="product-card-link">
+              <div className="product-thumb">
+                {product.imageUrl ? <img src={product.imageUrl} alt={product.name} /> : <span>No photo yet</span>}
+              </div>
+              <h3>{product.name}</h3>
+            </Link>
+            <p className="rating-line">
+              {product.reviewCount > 0 ? (
+                <>
+                  <Stars value={product.averageRating} /> {product.averageRating.toFixed(1)} ({product.reviewCount})
+                </>
+              ) : (
+                <span className="muted">No reviews yet</span>
+              )}
+            </p>
             <p className="price">${product.price.toFixed(2)}</p>
             <p className="seller">Sold by {product.seller.businessName}</p>
             <button className="btn-primary" onClick={() => handleAdd(product)}>Add to cart</button>
