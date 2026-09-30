@@ -6,6 +6,7 @@ import { LoginPage } from './pages/LoginPage';
 import { BuyerRegisterPage } from './pages/BuyerRegisterPage';
 import { CartPage } from './pages/CartPage';
 import { OrderPage } from './pages/OrderPage';
+import { PaymentPage } from './pages/PaymentPage';
 import { MyProductsPage } from './pages/MyProductsPage';
 import { MySellerOrdersPage } from './pages/MySellerOrdersPage';
 
@@ -51,6 +52,7 @@ function App() {
               <Route path="/buyer-register" element={<BuyerRegisterPage />} />
               <Route path="/cart" element={<CartPage />} />
               <Route path="/orders/:orderId" element={<OrderPage />} />
+              <Route path="/checkout/:orderId" element={<PaymentPage />} />
               <Route path="/seller/products" element={<MyProductsPage />} />
               <Route path="/seller/orders" element={<MySellerOrdersPage />} />
             </Routes>

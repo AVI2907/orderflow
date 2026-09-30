@@ -39,17 +39,13 @@ export function CartPage() {
     }));
 
     try {
-      // buyerId is no longer sent — the backend derives it from the authenticated
-      // buyer's JWT, so the request only needs the seller/item breakdown
+      // Step 1: create the order (status PLACED). Payment happens on the next page.
       const response = await orderApi.post('/orders', { sellerOrders });
-
       const orderId = response.data.id;
-      await orderApi.post(`/orders/${orderId}/pay`, {});
-
       clearCart();
-      navigate(`/orders/${orderId}`);
+      navigate(`/checkout/${orderId}`);
     } catch {
-      setError('Checkout failed. Please try again.');
+      setError('Could not place your order. Please try again.');
     } finally {
       setPlacing(false);
     }
@@ -73,7 +69,7 @@ export function CartPage() {
       {!buyerId && <p style={{ color: '#666', fontSize: '0.9rem' }}>You'll need to log in as a buyer to check out.</p>}
       {error && <p style={{ color: '#c0392b' }}>{error}</p>}
       <button className="btn-primary" onClick={handleCheckout} disabled={placing} style={{ marginTop: '1rem' }}>
-        {placing ? 'Placing order...' : 'Checkout'}
+        {placing ? 'Placing order...' : 'Proceed to payment'}
       </button>
     </div>
   );
