@@ -77,7 +77,17 @@ public class SellerOrderController {
     }
 
     @GetMapping("/seller/{sellerId}")
-    public List<SellerOrderResponse> listBySeller(@PathVariable UUID sellerId) {
-        return sellerOrderRepository.findBySellerId(sellerId).stream().map(SellerOrderResponse::from).toList();
+    public ResponseEntity<List<SellerOrderResponse>> listBySeller(@PathVariable UUID sellerId, Authentication authentication) {
+        boolean isAdmin = authentication.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .anyMatch(a -> a.equals("ROLE_ADMIN"));
+        boolean isThatSeller = authentication.getPrincipal() instanceof AuthenticatedUser user
+                && user.sellerId() != null
+                && user.sellerId().equals(sellerId.toString());
+        if (!isAdmin && !isThatSeller) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+        return ResponseEntity.ok(
+                sellerOrderRepository.findBySellerId(sellerId).stream().map(SellerOrderResponse::from).toList());
     }
 }

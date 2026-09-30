@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { orderApi } from '../api/client';
+import { ShippingAddressView, type ShippingAddress } from '../components/ShippingAddressView';
 import { useAuth } from '../context/AuthContext';
 
 interface OrderItem {
@@ -15,6 +16,7 @@ interface SellerOrder {
   subtotal: number;
   status: string;
   items: OrderItem[];
+  shippingAddress?: ShippingAddress | null;
 }
 
 const NEXT_STATUS: Record<string, string | null> = {
@@ -64,6 +66,7 @@ export function MySellerOrdersPage() {
         return (
           <div key={o.id} className="order-box">
             <p>Status: <span className="status-pill">{o.status}</span></p>
+            <ShippingAddressView address={o.shippingAddress} />
             {o.items.map((item) => (
               <p key={item.id}>{item.productName} x{item.quantity} — ${(item.unitPrice * item.quantity).toFixed(2)}</p>
             ))}

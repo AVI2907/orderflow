@@ -10,6 +10,7 @@ public record OrderResponse(
     UUID buyerId,
     BigDecimal totalAmount,
     OrderStatus overallStatus,
+    ShippingAddress shippingAddress,
     List<SellerOrderResponse> sellerOrders,
     Instant createdAt
 ) {
@@ -19,6 +20,7 @@ public record OrderResponse(
             order.getBuyerId(),
             order.getTotalAmount(),
             order.getOverallStatus(),
+            order.getShippingAddress(),
             order.getSellerOrders().stream().map(SellerOrderResponse::from).toList(),
             order.getCreatedAt()
         );

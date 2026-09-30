@@ -37,6 +37,7 @@ public class OrderController {
 
         Order order = new Order();
         order.setBuyerId(buyerId);
+        order.setShippingAddress(req.shippingAddress().toEntity());
 
         BigDecimal orderTotal = BigDecimal.ZERO;
 
@@ -70,42 +71,22 @@ public class OrderController {
         return ResponseEntity.ok(OrderResponse.from(saved));
     }
 
-    @PostMapping("/{id}/pay")
-    @Transactional
-    public ResponseEntity<OrderResponse> pay(@PathVariable UUID id, @RequestBody(required = false) PaymentRequest req) {
-        Order order = orderRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found: " + id));
-
-        boolean anyNotPlaced = order.getSellerOrders().stream()
-                .anyMatch(so -> so.getStatus() != OrderStatus.PLACED);
-        if (anyNotPlaced) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Order has already been processed");
-        }
-
-        boolean simulateFailure = req != null && Boolean.TRUE.equals(req.simulateFailure());
-        if (simulateFailure) {
-            throw new ResponseStatusException(HttpStatus.PAYMENT_REQUIRED, "Payment declined (simulated)");
-        }
-
-        for (SellerOrder so : order.getSellerOrders()) {
-            OrderStatus oldStatus = so.getStatus();
-            so.setStatus(OrderStatus.PAID);
-            eventPublisher.publish(new OrderEvent(
-                    order.getId(), so.getId(), so.getSellerId(), oldStatus, OrderStatus.PAID, Instant.now()));
-        }
-
-        order.setOverallStatus(order.computeOverallStatus());
-
-        Order saved = orderRepository.save(order);
-        return ResponseEntity.ok(OrderResponse.from(saved));
-    }
-
     @GetMapping("/{id}")
-    public ResponseEntity<OrderResponse> get(@PathVariable UUID id) {
-        return orderRepository.findById(id)
-            .map(OrderResponse::from)
-            .map(ResponseEntity::ok)
-            .orElse(ResponseEntity.notFound().build());
+    public ResponseEntity<OrderResponse> get(@PathVariable UUID id, Authentication authentication) {
+        Order order = orderRepository.findById(id).orElse(null);
+        if (order == null || authentication == null) {
+            return ResponseEntity.notFound().build();
+        }
+        boolean isAdmin = authentication.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+        boolean isOwner = authentication.getPrincipal() instanceof AuthenticatedUser user
+                && user.buyerId() != null
+                && user.buyerId().equals(order.getBuyerId().toString());
+        // 404 rather than 403, so other people's order IDs can't even be confirmed to exist
+        if (!isAdmin && !isOwner) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok(OrderResponse.from(order));
     }
 
     @GetMapping("/buyer/{buyerId}")

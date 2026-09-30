@@ -10,6 +10,7 @@ public record SellerOrderResponse(
     UUID sellerId,
     BigDecimal subtotal,
     OrderStatus status,
+    ShippingAddress shippingAddress,
     List<OrderItemResponse> items,
     Instant createdAt
 ) {
@@ -19,6 +20,8 @@ public record SellerOrderResponse(
             so.getSellerId(),
             so.getSubtotal(),
             so.getStatus(),
+            // Sellers need to know where to ship their part of the order
+            so.getOrder().getShippingAddress(),
             so.getItems().stream().map(OrderItemResponse::from).toList(),
             so.getCreatedAt()
         );

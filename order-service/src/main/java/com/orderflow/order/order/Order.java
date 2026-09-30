@@ -29,6 +29,9 @@ public class Order {
     @Column(nullable = false)
     private BigDecimal totalAmount;
 
+    @Embedded
+    private ShippingAddress shippingAddress;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private OrderStatus overallStatus;

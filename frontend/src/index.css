@@ -278,3 +278,28 @@ input:focus {
   grid-template-columns: 1fr 1fr;
   gap: 0.75rem;
 }
+
+/* Delivery address */
+.checkout-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-width: 520px;
+  margin-top: 1.5rem;
+}
+.checkout-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.address-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+.address-view {
+  margin: 1rem 0;
+  line-height: 1.5;
+}

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { orderApi } from '../api/client';
+import { ShippingAddressView, type ShippingAddress } from '../components/ShippingAddressView';
 
 interface OrderItem {
   id: string;
@@ -22,7 +23,11 @@ interface Order {
   totalAmount: number;
   overallStatus: string;
   sellerOrders: SellerOrder[];
+  shippingAddress?: ShippingAddress | null;
 }
+
+const POLL_INTERVAL_MS = 2000;
+const MAX_POLLS = 15;
 
 export function OrderPage() {
   const { orderId } = useParams();
@@ -30,21 +35,50 @@ export function OrderPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    orderApi
-      .get<Order>(`/orders/${orderId}`)
-      .then((res) => setOrder(res.data))
-      .catch(() => setError('Order not found'));
+    let cancelled = false;
+    let polls = 0;
+    let timer: number | undefined;
+
+    async function load() {
+      try {
+        const res = await orderApi.get<Order>(`/orders/${orderId}`);
+        if (cancelled) return;
+        setOrder(res.data);
+        // Payment is confirmed by Stripe's webhook, which can take a moment to arrive
+        if (res.data.overallStatus === 'PLACED' && polls < MAX_POLLS) {
+          polls++;
+          timer = window.setTimeout(load, POLL_INTERVAL_MS);
+        }
+      } catch {
+        if (!cancelled) setError('Order not found');
+      }
+    }
+
+    load();
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
   }, [orderId]);
 
   if (error) return <p style={{ color: '#c0392b' }}>{error}</p>;
   if (!order) return <p>Loading...</p>;
 
+  const awaitingPayment = order.overallStatus === 'PLACED';
+
   return (
     <div>
-      <h1>Order Confirmed</h1>
+      <h1>{awaitingPayment ? 'Confirming payment…' : 'Order Confirmed'}</h1>
+      {awaitingPayment && (
+        <p>
+          This usually takes a few seconds. If you haven't paid yet,{' '}
+          <Link to={`/checkout/${order.id}`}>complete your payment</Link>.
+        </p>
+      )}
       <p>Order ID: {order.id}</p>
       <p>Overall status: <span className="status-pill">{order.overallStatus}</span></p>
       <p style={{ fontWeight: 700, fontSize: '1.2rem' }}>Total: ${order.totalAmount.toFixed(2)}</p>
+      <ShippingAddressView address={order.shippingAddress} />
 
       {order.sellerOrders.map((so) => (
         <div key={so.id} className="order-box">
