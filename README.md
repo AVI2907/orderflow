@@ -1,127 +1,262 @@
 # OrderFlow — Multi-Vendor E-Commerce Marketplace
 
-A microservices-based e-commerce platform demonstrating production-style patterns: independent Spring Boot services, event-driven messaging via SQS, JWT-based auth, and a React storefront — deployed on real AWS infrastructure (not LocalStack, not a demo mode).
+A microservices e-commerce marketplace where multiple sellers list products and buyers check out a single cart that is split into per-seller sub-orders. Built with Spring Boot and React, and deployed on real AWS infrastructure.
 
-**Live stack:** two Spring Boot microservices on ECS (EC2 launch type), two RDS Postgres instances, a real SQS queue, and a React/TypeScript frontend.
+**Live demo:** https://d2j1wxboivmdi8.cloudfront.net
+
+Register a buyer account on the site to browse, add items to your cart, and check out. Payments are simulated; no real card is charged.
 
 ---
 
 ## Architecture
-┌─────────────────┐ ┌──────────────────────┐ ┌──────────────────────┐
-│ React Frontend │ HTTP │ catalog-service │ HTTP │ order-service │
-│ (Vite + TS) │────────▶│ (Spring Boot :8080) │ │ (Spring Boot :8081) │
-└─────────────────┘ └───────────┬───────────┘ └───────────┬───────────┘
-│ │
-▼ ▼
-┌───────────────────┐ ┌───────────────────┐
-│ RDS Postgres │ │ RDS Postgres │
-│ (catalog DB) │ │ (orders DB) │
-└────────────────────┘ └──────────┬──────────┘
-│
-▼
-┌────────────────────┐
-│ AWS SQS │
-│ (order-events) │
-└────────────────────┘
 
-Both services run as ECS tasks on a single shared EC2 instance (bridge networking), backed by independent RDS Postgres databases — one per service, enforcing a strict bounded-context separation typical of microservice architectures.
-
----
-
-## Services
-
-### catalog-service (:8080)
-Owns sellers and products.
-- Seller registration + admin approval workflow (`PENDING` → `APPROVED`)
-- Product CRUD, with ownership-enforced delete (a seller can only delete their own listings; admins can delete any)
-- JWT issuance and validation (shared secret with order-service)
-
-### order-service (:8081)
-Owns orders and multi-vendor order splitting.
-- A single checkout can span multiple sellers; each seller's portion becomes an independent `SellerOrder` with its own state machine (`PLACED → PAID → SHIPPED → DELIVERED`, or `CANCELLED`)
-- Publishes an event to SQS on every status transition, decoupling order-state changes from any downstream consumers (notifications, analytics, etc.)
-- Validates JWTs issued by catalog-service — no shared database, only a shared signing secret
-
----
-
-## Key Technical Decisions
-
-| Decision | Rationale |
-|---|---|
-| **Multi-vendor order splitting** | Cart is grouped by seller client-side; each seller-order tracks its own status independently, matching how real marketplaces (Etsy, Amazon Marketplace) reconcile multi-seller carts |
-| **Stateless JWT cross-service trust** | order-service verifies tokens it never issued, using only a shared secret — no session store, no service-to-service auth calls |
-| **SQS publish-and-continue** | A messaging failure is caught and logged, never rolled back with the business transaction — order state is the source of truth, not the event bus |
-| **EC2 launch type over Fargate** | Fargate has no AWS free tier; EC2 t3.micro uses the 750 free hours/month, at the cost of manually managing container placement |
-| **Independent databases per service** | No cross-service joins possible by design — forces the same discipline a true microservice boundary requires |
-| **linux/amd64 explicit builds** | Local dev is Apple Silicon (arm64); ECS runs x86_64, so every image is built with `docker buildx build --platform linux/amd64` |
-
----
-
-## Local Development
-
-**Prerequisites:** Java 21, Maven, Docker, Node 18+
-
-```bash
-# Start local infra (Postgres x2 + LocalStack for SQS)
-docker run -d --name orderflow-postgres -p 5433:5432 -e POSTGRES_PASSWORD=postgres postgres:16
-docker run -d --name orderflow-order-postgres -p 5434:5432 -e POSTGRES_PASSWORD=postgres postgres:16
-docker run -d --name orderflow-localstack -p 4566:4566 localstack/localstack:4.4.0
-
-# Run each service
-cd catalog-service && ./mvnw spring-boot:run   # :8080
-cd order-service && ./mvnw spring-boot:run     # :8081
-
-# Run the frontend
-cd frontend && npm install && npm run dev      # :5173
+```
+                         ┌──────────────────────────────┐
+  Browser ──HTTPS──────▶ │      Amazon CloudFront       │
+                         └──┬───────────┬───────────┬───┘
+               default (/*) │           │           │ /orders*, /seller-orders*
+                            ▼           │           ▼
+                     ┌───────────┐      │   ┌──────────────────┐
+                     │ S3 bucket │      │   │  order-service   │──▶ RDS Postgres (orders)
+                     │ React SPA │      │   │  Spring Boot     │──▶ Amazon SQS (order-events)
+                     └───────────┘      │   └──────────────────┘
+                                        ▼ /products*, /sellers*, /buyers*, /auth/*
+                                ┌──────────────────┐
+                                │ catalog-service  │──▶ RDS Postgres (catalog)
+                                │ Spring Boot      │
+                                └──────────────────┘
+               Both services run as containers on ECS (EC2 launch type), images in ECR
 ```
 
-## Production Deployment
+- **catalog-service**: sellers, buyers, products, authentication. Issues JWTs.
+- **order-service**: orders, per-seller sub-orders, order status state machine, event publishing. Verifies JWTs statelessly using the shared signing secret; it has no login endpoint of its own.
+- **Frontend**: React + TypeScript (Vite), served from S3 through CloudFront. API calls use relative paths, and CloudFront routes them by path to the right service, so the browser only ever talks to one origin.
 
-Both services are containerized and deployed to a single-instance ECS cluster (EC2 launch type) behind no load balancer (portfolio-scale, not HA). Redeploying after a code change:
+## Features
 
-```bash
-./mvnw clean package -DskipTests
-aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin <account>.dkr.ecr.us-east-1.amazonaws.com
-docker buildx build --platform linux/amd64 -t <account>.dkr.ecr.us-east-1.amazonaws.com/orderflow-<service>:latest --push .
-aws ecs update-service --cluster orderflow-cluster --service <service> --force-new-deployment
-```
+- **Three roles**: buyer, seller, and admin, enforced with Spring Security and JWT claims (`role`, `sellerId`, `buyerId`).
+- **Multi-vendor checkout**: one cart becomes one order with a sub-order per seller, each tracked independently.
+- **Order state machine**: `PLACED → PAID → SHIPPED → DELIVERED` (or `CANCELLED`), with invalid transitions rejected (409). The parent order's status is derived from its least-advanced sub-order.
+- **Ownership checks**: sellers can only update their own sub-orders and delete their own products; buyers can only list their own orders. Buyer identity comes from the JWT, never from the request body.
+- **Seller approval**: new sellers start as `PENDING` until an admin approves them.
+- **Event-driven**: every status change publishes an event to SQS.
+- **Price snapshots**: product name and price are copied onto each order item at purchase time, so later catalog edits don't rewrite order history.
 
----
-
-## API Reference (abridged)
+## API reference
 
 **catalog-service**
+
 | Method | Path | Auth |
 |---|---|---|
 | POST | `/sellers/register` | none |
+| POST | `/buyers/register` | none |
 | POST | `/auth/login` | none |
-| GET | `/products` | none |
+| GET | `/products`, `/products/{id}`, `/products/seller/{sellerId}` | none |
 | POST | `/products` | seller |
 | DELETE | `/products/{id}` | owning seller or admin |
 | PATCH | `/sellers/{id}/status` | admin |
 
 **order-service**
+
 | Method | Path | Auth |
 |---|---|---|
-| POST | `/orders` | none* |
-| POST | `/orders/{id}/pay` | none* |
-| GET | `/orders/buyer/{buyerId}` | none* |
-| GET | `/seller-orders/seller/{sellerId}` | seller |
-| PATCH | `/seller-orders/{id}/status` | seller |
+| POST | `/orders` | buyer (buyer ID taken from the JWT) |
+| POST | `/orders/{id}/pay` | authenticated (simulated payment) |
+| GET | `/orders/{id}` | none |
+| GET | `/orders/buyer/{buyerId}` | that buyer or admin |
+| GET | `/seller-orders/seller/{sellerId}` | none |
+| PATCH | `/seller-orders/{id}/status` | owning seller or admin |
 
-*\*buyerId is a hardcoded placeholder — see "Known Limitations" below.*
+## Tech stack
+
+Java 21 · Spring Boot 4.1 · Spring Data JPA / Hibernate 7 · Spring Security 7 + JJWT · PostgreSQL 16 · React + TypeScript (Vite) · AWS ECS (EC2), ECR, RDS, SQS, S3, CloudFront · Docker
+
+## Configuration
+
+No secrets are committed. In production, the services read them from environment variables set in the ECS task definitions:
+
+| Variable | Used by |
+|---|---|
+| `DB_PASSWORD` | both services |
+| `JWT_SECRET` | both services (must match) |
+| `ADMIN_PASSWORD` | catalog-service |
+| `SPRING_PROFILES_ACTIVE=aws` | both services |
+
+Without the `aws` profile, the services fall back to local-development defaults.
+
+## Running the backend locally
+
+Requires Java 21 and Docker.
+
+```bash
+docker run -d --name orderflow-postgres -p 5433:5432 \
+  -e POSTGRES_DB=orderflow -e POSTGRES_USER=orderflow -e POSTGRES_PASSWORD=orderflow postgres:16
+docker run -d --name orderflow-order-postgres -p 5434:5432 \
+  -e POSTGRES_DB=orderflow_orders -e POSTGRES_USER=orderflow -e POSTGRES_PASSWORD=orderflow postgres:16
+docker run -d --name orderflow-localstack -p 4566:4566 localstack/localstack:4.4.0
+
+cd catalog-service && ./mvnw spring-boot:run   # port 8080
+cd order-service   && ./mvnw spring-boot:run   # port 8081
+```
+
+The frontend uses relative API paths, which CloudFront routes in production. To run it locally against these services, add a proxy for those paths in `vite.config.ts`.
+
+## Deploying
+
+```bash
+./mvnw clean package -DskipTests
+docker buildx build --platform linux/amd64 \
+  -t <account>.dkr.ecr.us-east-1.amazonaws.com/orderflow-<service>:latest --push .
+aws ecs update-service --cluster orderflow-cluster --service <service> --force-new-deployment
+```
+
+Images are built for `linux/amd64` because development happens on Apple Silicon but the ECS host is x86_64.
+
+Frontend:
+
+```bash
+cd frontend && npm run build
+aws s3 sync dist/ s3://<bucket> --delete
+aws cloudfront
+# OrderFlow — Multi-Vendor E-Commerce Marketplace
+
+A microservices e-commerce marketplace where multiple sellers list products and buyers check out a single cart that is split into per-seller sub-orders. Built with Spring Boot and React, and deployed on real AWS infrastructure.
+
+**Live demo:** https://d2j1wxboivmdi8.cloudfront.net
+
+Register a buyer account on the site to browse, add items to your cart, and check out. Payments are simulated; no real card is charged.
 
 ---
 
-## Known Limitations (by design, for a portfolio scope)
+## Architecture
 
-- **No buyer account system** — `buyerId` is a fixed placeholder UUID rather than derived from an authenticated buyer identity. A real implementation would add buyer registration/login mirroring the seller flow.
-- **No load balancer / single point of failure** — one EC2 instance hosts both services; a production system would run each service across multiple AZs behind an ALB.
-- **Frontend not publicly hosted** — currently runs locally against the live AWS backend; not yet deployed to S3/CloudFront.
-- **No dead-letter queue** — a failed SQS publish is logged and swallowed rather than retried or routed to a DLQ.
+```
+                         ┌──────────────────────────────┐
+  Browser ──HTTPS──────▶ │      Amazon CloudFront       │
+                         └──┬───────────┬───────────┬───┘
+               default (/*) │           │           │ /orders*, /seller-orders*
+                            ▼           │           ▼
+                     ┌───────────┐      │   ┌──────────────────┐
+                     │ S3 bucket │      │   │  order-service   │──▶ RDS Postgres (orders)
+                     │ React SPA │      │   │  Spring Boot     │──▶ Amazon SQS (order-events)
+                     └───────────┘      │   └──────────────────┘
+                                        ▼ /products*, /sellers*, /buyers*, /auth/*
+                                ┌──────────────────┐
+                                │ catalog-service  │──▶ RDS Postgres (catalog)
+                                │ Spring Boot      │
+                                └──────────────────┘
+               Both services run as containers on ECS (EC2 launch type), images in ECR
+```
 
----
+- **catalog-service**: sellers, buyers, products, authentication. Issues JWTs.
+- **order-service**: orders, per-seller sub-orders, order status state machine, event publishing. Verifies JWTs statelessly using the shared signing secret; it has no login endpoint of its own.
+- **Frontend**: React + TypeScript (Vite), served from S3 through CloudFront. API calls use relative paths, and CloudFront routes them by path to the right service, so the browser only ever talks to one origin.
 
-## Stack
+## Features
 
-Spring Boot 4.1.1 · Java 21 · Spring Data JPA / Hibernate 7 · Spring Security 7 + JJWT · PostgreSQL 16 · AWS SQS · React + TypeScript (Vite) · AWS ECS (EC2) · RDS · ECR
+- **Three roles**: buyer, seller, and admin, enforced with Spring Security and JWT claims (`role`, `sellerId`, `buyerId`).
+- **Multi-vendor checkout**: one cart becomes one order with a sub-order per seller, each tracked independently.
+- **Order state machine**: `PLACED → PAID → SHIPPED → DELIVERED` (or `CANCELLED`), with invalid transitions rejected (409). The parent order's status is derived from its least-advanced sub-order.
+- **Ownership checks**: sellers can only update their own sub-orders and delete their own products; buyers can only list their own orders. Buyer identity comes from the JWT, never from the request body.
+- **Seller approval**: new sellers start as `PENDING` until an admin approves them.
+- **Event-driven**: every status change publishes an event to SQS.
+- **Price snapshots**: product name and price are copied onto each order item at purchase time, so later catalog edits don't rewrite order history.
+
+## API reference
+
+**catalog-service**
+
+| Method | Path | Auth |
+|---|---|---|
+| POST | `/sellers/register` | none |
+| POST | `/buyers/register` | none |
+| POST | `/auth/login` | none |
+| GET | `/products`, `/products/{id}`, `/products/seller/{sellerId}` | none |
+| POST | `/products` | seller |
+| DELETE | `/products/{id}` | owning seller or admin |
+| PATCH | `/sellers/{id}/status` | admin |
+
+**order-service**
+
+| Method | Path | Auth |
+|---|---|---|
+| POST | `/orders` | buyer (buyer ID taken from the JWT) |
+| POST | `/orders/{id}/pay` | authenticated (simulated payment) |
+| GET | `/orders/{id}` | none |
+| GET | `/orders/buyer/{buyerId}` | that buyer or admin |
+| GET | `/seller-orders/seller/{sellerId}` | none |
+| PATCH | `/seller-orders/{id}/status` | owning seller or admin |
+
+## Tech stack
+
+Java 21 · Spring Boot 4.1 · Spring Data JPA / Hibernate 7 · Spring Security 7 + JJWT · PostgreSQL 16 · React + TypeScript (Vite) · AWS ECS (EC2), ECR, RDS, SQS, S3, CloudFront · Docker
+
+## Configuration
+
+No secrets are committed. In production, the services read them from environment variables set in the ECS task definitions:
+
+| Variable | Used by |
+|---|---|
+| `DB_PASSWORD` | both services |
+| `JWT_SECRET` | both services (must match) |
+| `ADMIN_PASSWORD` | catalog-service |
+| `SPRING_PROFILES_ACTIVE=aws` | both services |
+
+Without the `aws` profile, the services fall back to local-development defaults.
+
+## Running the backend locally
+
+Requires Java 21 and Docker.
+
+```bash
+docker run -d --name orderflow-postgres -p 5433:5432 \
+  -e POSTGRES_DB=orderflow -e POSTGRES_USER=orderflow -e POSTGRES_PASSWORD=orderflow postgres:16
+docker run -d --name orderflow-order-postgres -p 5434:5432 \
+  -e POSTGRES_DB=orderflow_orders -e POSTGRES_USER=orderflow -e POSTGRES_PASSWORD=orderflow postgres:16
+docker run -d --name orderflow-localstack -p 4566:4566 localstack/localstack:4.4.0
+
+cd catalog-service && ./mvnw spring-boot:run   # port 8080
+cd order-service   && ./mvnw spring-boot:run   # port 8081
+```
+
+The frontend uses relative API paths, which CloudFront routes in production. To run it locally against these services, add a proxy for those paths in `vite.config.ts`.
+
+## Deploying
+
+```bash
+./mvnw clean package -DskipTests
+docker buildx build --platform linux/amd64 \
+  -t <account>.dkr.ecr.us-east-1.amazonaws.com/orderflow-<service>:latest --push .
+aws ecs update-service --cluster orderflow-cluster --service <service> --force-new-deployment
+```
+
+Images are built for `linux/amd64` because development happens on Apple Silicon but the ECS host is x86_64.
+
+Frontend:
+
+```bash
+cd frontend && npm run build
+aws s3 sync dist/ s3://<bucket> --delete
+aws cloudfront create-invalidation --distribution-id <id> --paths "/*"
+```
+
+## Problems solved along the way
+
+- **Login worked from curl but failed in the browser.** Browsers send an `Origin` header and curl doesn't. Spring's CORS config only allowed `http://localhost:5173`, so every browser request through CloudFront was rejected with `Invalid CORS request`. Fixed by adding the CloudFront origin to both services.
+- **A CloudFront error rule was hiding real API errors.** A `403 → /index.html (200)` rule, added so the SPA's client-side routes would load, also rewrote genuine API 403s into successful HTML responses. The frontend then stored `"undefined"` as the login token. Fixed by granting CloudFront `s3:ListBucket`, so missing S3 paths return 404 instead of 403, and removing the 403 rule.
+- **Containers wouldn't start on ECS** (`no matching manifest for linux/amd64`). Fixed by building with `docker buildx --platform linux/amd64`.
+- **Deployments stalled on a single t3.micro** because ECS tried to run old and new tasks side by side. Fixed by setting `minimumHealthyPercent=0, maximumPercent=100`, trading brief downtime for fitting in memory.
+- **Secrets moved out of source.** The JWT secret, admin password and database password went from hardcoded properties to environment variables before the repo went public, and the secrets were rotated.
+
+## Known limitations
+
+Deliberate trade-offs for a free-tier portfolio deployment:
+
+- **Simulated payments.** `/orders/{id}/pay` marks orders as paid without charging a card. Real processing (e.g. Stripe) is the planned next step.
+- **Single EC2 instance, no load balancer.** One t3.micro runs both services; there's no multi-AZ redundancy, and deploys cause brief downtime.
+- **CloudFront to EC2 is plain HTTP.** Browser traffic is HTTPS to CloudFront, but the hop to the backend isn't encrypted. An ALB with a TLS certificate would fix this.
+- **Secrets are plain task-definition environment variables.** AWS Secrets Manager or SSM Parameter Store would be the production-grade choice.
+- **Some read endpoints are open.** `GET /orders/{id}` and `GET /seller-orders/seller/{id}` don't check ownership, and `/orders/{id}/pay` doesn't verify that the caller owns the order.
+- **No SQS consumer yet.** Events are published but nothing reads them; a Lambda for notifications is planned. There is also no dead-letter queue.
+- **Seller onboarding and admin approval are API-only**; there's no UI for them yet.
+- **No automated tests.**
