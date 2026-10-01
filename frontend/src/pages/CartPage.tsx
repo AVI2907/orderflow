@@ -46,35 +46,24 @@ export function CartPage() {
     setError(null);
     setPlacing(true);
 
-    // Group cart items by seller — matches the backend's multi-vendor order shape
-    const bySeller = new Map<string, typeof items>();
-    for (const item of items) {
-      const sellerId = item.product.seller.id;
-      if (!bySeller.has(sellerId)) bySeller.set(sellerId, []);
-      bySeller.get(sellerId)!.push(item);
-    }
-
-    const sellerOrders = Array.from(bySeller.entries()).map(([sellerId, sellerItems]) => ({
-      sellerId,
-      items: sellerItems.map((i) => ({
-        productId: i.product.id,
-        productName: i.product.name,
-        unitPrice: i.product.price,
-        quantity: i.quantity,
-      })),
-    }));
+    // Only product IDs and quantities: the server looks up prices, names and sellers itself
+    const orderItems = items.map((i) => ({ productId: i.product.id, quantity: i.quantity }));
 
     try {
-      const response = await orderApi.post('/orders', { sellerOrders, shippingAddress: address });
+      const response = await orderApi.post('/orders', { items: orderItems, shippingAddress: address });
       const orderId = response.data.id;
       clearCart();
       navigate(`/checkout/${orderId}`);
     } catch (err: any) {
-      setError(
-        err?.response?.status === 400
-          ? 'Please check your delivery address and try again.'
-          : 'Could not place your order. Please try again.'
-      );
+      const status = err?.response?.status;
+      const serverMessage = err?.response?.data?.message;
+      if ((status === 409 || status === 503) && serverMessage) {
+        setError(serverMessage);
+      } else if (status === 400) {
+        setError('Please check your delivery address and try again.');
+      } else {
+        setError('Could not place your order. Please try again.');
+      }
     } finally {
       setPlacing(false);
     }

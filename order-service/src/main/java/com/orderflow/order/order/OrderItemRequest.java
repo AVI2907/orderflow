@@ -1,15 +1,13 @@
 package com.orderflow.order.order;
 
-import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Positive;
 
-import java.math.BigDecimal;
 import java.util.UUID;
 
+/** The browser only says which product and how many. Price, name and seller come from catalog-service. */
 public record OrderItemRequest(
     @NotNull UUID productId,
-    @NotBlank String productName,
-    @NotNull BigDecimal unitPrice,
-    @Positive Integer quantity
+    @NotNull @Min(1) @Max(100) Integer quantity
 ) {}

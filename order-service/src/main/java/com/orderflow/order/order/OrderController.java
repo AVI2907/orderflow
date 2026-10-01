@@ -1,7 +1,8 @@
 package com.orderflow.order.order;
 
+import com.orderflow.order.catalog.CatalogClient;
+import com.orderflow.order.catalog.CatalogClient.CatalogProduct;
 import com.orderflow.order.config.AuthenticatedUser;
-import com.orderflow.order.config.SqsEventPublisher;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -11,8 +12,9 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
-import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -20,11 +22,11 @@ import java.util.UUID;
 public class OrderController {
 
     private final OrderRepository orderRepository;
-    private final SqsEventPublisher eventPublisher;
+    private final CatalogClient catalogClient;
 
-    public OrderController(OrderRepository orderRepository, SqsEventPublisher eventPublisher) {
+    public OrderController(OrderRepository orderRepository, CatalogClient catalogClient) {
         this.orderRepository = orderRepository;
-        this.eventPublisher = eventPublisher;
+        this.catalogClient = catalogClient;
     }
 
     @PostMapping
@@ -33,39 +35,55 @@ public class OrderController {
         if (!(authentication.getPrincipal() instanceof AuthenticatedUser user) || user.buyerId() == null) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only authenticated buyers can place orders");
         }
-        UUID buyerId = UUID.fromString(user.buyerId());
 
-        Order order = new Order();
-        order.setBuyerId(buyerId);
-        order.setShippingAddress(req.shippingAddress().toEntity());
-
-        BigDecimal orderTotal = BigDecimal.ZERO;
-
-        for (SellerOrderRequest soReq : req.sellerOrders()) {
-            SellerOrder sellerOrder = new SellerOrder();
-            sellerOrder.setOrder(order);
-            sellerOrder.setSellerId(soReq.sellerId());
-
-            BigDecimal subtotal = BigDecimal.ZERO;
-
-            for (OrderItemRequest itemReq : soReq.items()) {
-                OrderItem item = new OrderItem();
-                item.setSellerOrder(sellerOrder);
-                item.setProductId(itemReq.productId());
-                item.setProductName(itemReq.productName());
-                item.setUnitPrice(itemReq.unitPrice());
-                item.setQuantity(itemReq.quantity());
-
-                subtotal = subtotal.add(itemReq.unitPrice().multiply(BigDecimal.valueOf(itemReq.quantity())));
-                sellerOrder.getItems().add(item);
-            }
-
-            sellerOrder.setSubtotal(subtotal);
-            orderTotal = orderTotal.add(subtotal);
-            order.getSellerOrders().add(sellerOrder);
+        // Combine repeated lines for the same product
+        Map<UUID, Integer> quantities = new LinkedHashMap<>();
+        for (OrderItemRequest line : req.items()) {
+            quantities.merge(line.productId(), line.quantity(), Integer::sum);
         }
 
-        order.setTotalAmount(orderTotal);
+        Order order = new Order();
+        order.setBuyerId(UUID.fromString(user.buyerId()));
+        order.setShippingAddress(req.shippingAddress().toEntity());
+        Map<UUID, SellerOrder> sellerOrders = new LinkedHashMap<>();
+
+        for (Map.Entry<UUID, Integer> entry : quantities.entrySet()) {
+            // Price, name and seller come from catalog-service, never from the browser
+            CatalogProduct product = catalogClient.getProduct(entry.getKey());
+            int quantity = entry.getValue();
+
+            if (!"APPROVED".equals(product.seller().status())) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, product.name() + " is no longer available");
+            }
+            if (product.stockQuantity() == null || product.stockQuantity() < quantity) {
+                int left = product.stockQuantity() == null ? 0 : product.stockQuantity();
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        left == 0 ? product.name() + " is out of stock" : "Only " + left + " left of " + product.name());
+            }
+
+            // One sub-order per seller
+            SellerOrder sellerOrder = sellerOrders.computeIfAbsent(product.seller().id(), sellerId -> {
+                SellerOrder created = new SellerOrder();
+                created.setOrder(order);
+                created.setSellerId(sellerId);
+                created.setSubtotal(BigDecimal.ZERO);
+                order.getSellerOrders().add(created);
+                return created;
+            });
+
+            OrderItem item = new OrderItem();
+            item.setSellerOrder(sellerOrder);
+            item.setProductId(product.id());
+            item.setProductName(product.name());
+            item.setUnitPrice(product.price());
+            item.setQuantity(quantity);
+            sellerOrder.getItems().add(item);
+            sellerOrder.setSubtotal(sellerOrder.getSubtotal().add(product.price().multiply(BigDecimal.valueOf(quantity))));
+        }
+
+        order.setTotalAmount(order.getSellerOrders().stream()
+                .map(SellerOrder::getSubtotal)
+                .reduce(BigDecimal.ZERO, BigDecimal::add));
 
         Order saved = orderRepository.save(order);
         return ResponseEntity.ok(OrderResponse.from(saved));
