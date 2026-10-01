@@ -19,6 +19,10 @@ import java.util.UUID;
 @Service
 public class StripePaymentService {
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.orderflow.order.catalog.CatalogClient catalogClient;
+
+
     private final OrderRepository orderRepository;
     private final SqsEventPublisher eventPublisher;
     private final String secretKey;
@@ -89,6 +93,17 @@ public class StripePaymentService {
         if (toCents(order.getTotalAmount()) != amountReceivedCents) {
             System.err.println("Amount mismatch for order " + orderId + ": received " + amountReceivedCents);
             return;
+        }
+
+        // Reduce stock first. If this fails, the exception rolls everything back and Stripe
+        // retries the webhook later; catalog-service ignores repeats for the same order.
+        java.util.List<com.orderflow.order.catalog.CatalogClient.StockLine> stockLines = order.getSellerOrders().stream()
+                .flatMap(so -> so.getItems().stream())
+                .map(item -> new com.orderflow.order.catalog.CatalogClient.StockLine(item.getProductId(), item.getQuantity()))
+                .toList();
+        java.util.List<UUID> oversold = catalogClient.deductStock(order.getId(), stockLines);
+        if (!oversold.isEmpty()) {
+            System.err.println("OVERSOLD: order " + orderId + " products " + oversold + " - needs seller attention");
         }
 
         for (SellerOrder so : order.getSellerOrders()) {
