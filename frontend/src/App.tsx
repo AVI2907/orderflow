@@ -77,7 +77,7 @@ function App() {
               <Route path="/item/:productId" element={protect(<ProductDetailPage />)} />
               <Route path="/cart" element={protect(<CartPage />)} />
               <Route path="/checkout/:orderId" element={protect(<PaymentPage />)} />
-              <Route path="/orders/:orderId" element={protect(<OrderPage />)} />
+              <Route path="/order/:orderId" element={protect(<OrderPage />)} />
               <Route path="/seller/products" element={protect(<MyProductsPage />)} />
               <Route path="/seller/orders" element={protect(<MySellerOrdersPage />)} />
 

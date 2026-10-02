@@ -339,3 +339,16 @@ input:focus {
 .review { border-top: 1px solid var(--line); padding: 1rem 0; }
 .review-form { display: flex; flex-direction: column; gap: 0.75rem; max-width: 520px; margin-bottom: 1.5rem; }
 .review-form textarea { min-height: 100px; font: inherit; padding: 0.5rem; }
+
+/* Seller listings with photos */
+.photo-preview { width: 120px; height: 120px; object-fit: cover; border-radius: 4px; }
+.listing-row { display: flex; align-items: center; gap: 1rem; }
+.listing-thumb {
+  width: 64px; height: 64px; flex-shrink: 0;
+  background: #f3f3f3; border-radius: 4px; overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.7rem; color: #999;
+}
+.listing-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.listing-info { flex: 1; }
+.listing-photo-btn { cursor: pointer; white-space: nowrap; }

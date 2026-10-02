@@ -42,7 +42,7 @@ function CheckoutForm({ orderId, total }: { orderId: string; total: number }) {
     // Stripe shows 3D Secure verification itself if the bank requires it.
     const result = await stripe.confirmPayment({
       elements,
-      confirmParams: { return_url: `${window.location.origin}/orders/${orderId}` },
+      confirmParams: { return_url: `${window.location.origin}/order/${orderId}` },
       redirect: 'if_required',
     });
 
@@ -52,7 +52,7 @@ function CheckoutForm({ orderId, total }: { orderId: string; total: number }) {
       return;
     }
     // Stripe accepted the payment; the webhook marks the order PAID on our side
-    navigate(`/orders/${orderId}`);
+    navigate(`/order/${orderId}`);
   }
 
   return (
@@ -83,7 +83,7 @@ export function PaymentPage() {
       try {
         const res = await orderApi.get<Order>(`/orders/${orderId}`);
         if (res.data.overallStatus !== 'PLACED') {
-          navigate(`/orders/${orderId}`, { replace: true });
+          navigate(`/order/${orderId}`, { replace: true });
           return;
         }
         setOrder(res.data);
