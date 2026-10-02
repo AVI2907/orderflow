@@ -16,10 +16,16 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 @RestController
 @RequestMapping("/products")
 public class ProductController {
+
+    // Only images uploaded to our own bucket, never arbitrary outside links
+    private static final Pattern IMAGE_URL = Pattern.compile("^/product-images/[0-9a-f-]{36}\\.(jpg|png|webp)$");
+
+    public record ImageUpdateRequest(String imageUrl) {}
 
     private final ProductRepository productRepository;
     private final SellerRepository sellerRepository;
@@ -48,7 +54,7 @@ public class ProductController {
         product.setPrice(req.price());
         product.setStockQuantity(req.stockQuantity());
         product.setCategory(req.category());
-        product.setImageUrl(req.imageUrl());
+        product.setImageUrl(cleanImageUrl(req.imageUrl()));
 
         Product saved = productRepository.save(product);
         return ResponseEntity.ok(ProductResponse.from(saved));
@@ -79,6 +85,21 @@ public class ProductController {
             .toList();
     }
 
+    /** Lets the owning seller add, replace or remove a product photo. */
+    @PatchMapping("/{id}/image")
+    public ResponseEntity<ProductResponse> updateImage(@PathVariable UUID id, @RequestBody ImageUpdateRequest req,
+                                                       Authentication authentication) {
+        Product product = productRepository.findById(id)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Product not found"));
+        Seller requester = sellerRepository.findByEmail(authentication.getName()).orElse(null);
+        if (requester == null || !requester.getId().equals(product.getSeller().getId())) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+        product.setImageUrl(cleanImageUrl(req.imageUrl()));
+        Product saved = productRepository.save(product);
+        return ResponseEntity.ok(ProductResponse.from(saved, ratingSummaries().getOrDefault(id, RatingSummary.NONE)));
+    }
+
     @DeleteMapping("/{id}")
     @Transactional
     public ResponseEntity<Void> delete(@PathVariable UUID id, Authentication authentication) {
@@ -101,6 +122,14 @@ public class ProductController {
         reviewRepository.deleteByProductId(id);
         productRepository.deleteById(id);
         return ResponseEntity.noContent().build();
+    }
+
+    private static String cleanImageUrl(String url) {
+        if (url == null || url.isBlank()) return null;
+        if (!IMAGE_URL.matcher(url).matches()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid image");
+        }
+        return url;
     }
 
     /** Average rating and count for every reviewed product, in one query. */
