@@ -401,3 +401,19 @@ input:focus {
 .admin-actions { display: flex; gap: 0.5rem; justify-content: flex-end; }
 .status-pending { background: #fff3cd; }
 .status-suspended { background: #fdecea; }
+
+/* Store search and filters */
+.filters {
+  display: grid;
+  grid-template-columns: minmax(200px, 2fr) minmax(150px, 1fr) minmax(150px, 1fr) auto;
+  gap: 0.75rem;
+  align-items: center;
+  margin: 1rem 0 0.5rem;
+}
+@media (max-width: 700px) {
+  .filters { grid-template-columns: 1fr 1fr; }
+  .filters input[type="search"] { grid-column: 1 / -1; }
+}
+.filter-check { display: flex; align-items: center; gap: 0.4rem; white-space: nowrap; font-size: 0.9rem; }
+.result-line { margin: 0.25rem 0 1rem; font-size: 0.9rem; }
+.link-button { background: none; border: none; padding: 0; color: inherit; text-decoration: underline; cursor: pointer; font: inherit; }
