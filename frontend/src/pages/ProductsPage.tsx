@@ -61,7 +61,9 @@ export function ProductsPage() {
             </p>
             <p className="price">${product.price.toFixed(2)}</p>
             <p className="seller">Sold by {product.seller.businessName}</p>
-            <button className="btn-primary" onClick={() => handleAdd(product)}>Add to cart</button>
+            <button className="btn-primary" onClick={() => handleAdd(product)} disabled={product.stockQuantity < 1}>
+              {product.stockQuantity < 1 ? 'Out of stock' : 'Add to cart'}
+            </button>
           </div>
         ))}
       </div>
