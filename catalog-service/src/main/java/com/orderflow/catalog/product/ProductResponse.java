@@ -1,6 +1,7 @@
 package com.orderflow.catalog.product;
 
-import com.orderflow.catalog.seller.SellerResponse;
+import com.orderflow.catalog.seller.Seller;
+import com.orderflow.catalog.seller.SellerStatus;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -8,7 +9,7 @@ import java.util.UUID;
 
 public record ProductResponse(
     UUID id,
-    SellerResponse seller,
+    SellerSummary seller,
     String name,
     String description,
     BigDecimal price,
@@ -19,6 +20,13 @@ public record ProductResponse(
     long reviewCount,
     Instant createdAt
 ) {
+    /** Public seller info shown alongside products. Deliberately no email address. */
+    public record SellerSummary(UUID id, String businessName, SellerStatus status) {
+        static SellerSummary from(Seller seller) {
+            return new SellerSummary(seller.getId(), seller.getBusinessName(), seller.getStatus());
+        }
+    }
+
     public static ProductResponse from(Product product) {
         return from(product, RatingSummary.NONE);
     }
@@ -26,7 +34,7 @@ public record ProductResponse(
     public static ProductResponse from(Product product, RatingSummary rating) {
         return new ProductResponse(
             product.getId(),
-            SellerResponse.from(product.getSeller()),
+            SellerSummary.from(product.getSeller()),
             product.getName(),
             product.getDescription(),
             product.getPrice(),

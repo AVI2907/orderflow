@@ -6,6 +6,8 @@ import { isTokenValid } from './utils/jwt';
 import { ProductsPage } from './pages/ProductsPage';
 import { ProductDetailPage } from './pages/ProductDetailPage';
 import { MyOrdersPage } from './pages/MyOrdersPage';
+import { SellerRegisterPage } from './pages/SellerRegisterPage';
+import { AdminPage } from './pages/AdminPage';
 import { LoginPage } from './pages/LoginPage';
 import { BuyerRegisterPage } from './pages/BuyerRegisterPage';
 import { CartPage } from './pages/CartPage';
@@ -25,7 +27,7 @@ function RequireAuth({ children }: { children: ReactNode }) {
 }
 
 function Nav() {
-  const { token, email, buyerId, sellerId, logout } = useAuth();
+  const { token, email, buyerId, sellerId, role, logout } = useAuth();
   const { items } = useCart();
   const itemCount = items.reduce((sum, i) => sum + i.quantity, 0);
   const loggedIn = isTokenValid(token);
@@ -37,6 +39,7 @@ function Nav() {
         <>
           <Link to="/">Products</Link>
           <Link to="/cart">Cart ({itemCount})</Link>
+          {role === 'ADMIN' && <Link to="/admin">Admin</Link>}
           {buyerId && <Link to="/my-orders">My Orders</Link>}
           {sellerId && (
             <>
@@ -73,10 +76,12 @@ function App() {
               {/* Public */}
               <Route path="/login" element={<LoginPage />} />
               <Route path="/buyer-register" element={<BuyerRegisterPage />} />
+              <Route path="/seller-register" element={<SellerRegisterPage />} />
 
               {/* Everything else requires login */}
               <Route path="/" element={protect(<ProductsPage />)} />
               <Route path="/item/:productId" element={protect(<ProductDetailPage />)} />
+              <Route path="/admin" element={protect(<AdminPage />)} />
               <Route path="/my-orders" element={protect(<MyOrdersPage />)} />
               <Route path="/cart" element={protect(<CartPage />)} />
               <Route path="/checkout/:orderId" element={protect(<PaymentPage />)} />

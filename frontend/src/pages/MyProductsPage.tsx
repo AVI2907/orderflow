@@ -29,6 +29,15 @@ export function MyProductsPage() {
   const [editForm, setEditForm] = useState<EditForm>({ name: '', description: '', price: '', stock: '', category: '' });
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [accountStatus, setAccountStatus] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!sellerId) return;
+    catalogApi
+      .get<{ status: string }>('/sellers/me')
+      .then((res) => setAccountStatus(res.data.status))
+      .catch(() => {});
+  }, [sellerId]);
 
   function loadProducts() {
     if (!sellerId) return;
@@ -146,6 +155,12 @@ export function MyProductsPage() {
   return (
     <div>
       <h1>My Products</h1>
+      {accountStatus === 'PENDING' && (
+        <p className="notice">Your seller account is waiting for approval. You can list products once an admin approves it.</p>
+      )}
+      {accountStatus === 'SUSPENDED' && (
+        <p className="notice notice-danger">Your seller account is suspended, so your products are hidden from the store.</p>
+      )}
       {error && <p style={{ color: '#c0392b' }}>{error}</p>}
 
       <form onSubmit={handleAddProduct} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', maxWidth: 360, margin: '1.5rem 0 2.5rem' }}>

@@ -46,6 +46,9 @@ export function LoginPage() {
       <p style={{ marginTop: '1rem', fontSize: '0.9rem' }}>
         New here? <Link to="/buyer-register">Create a buyer account</Link>
       </p>
+      <p style={{ fontSize: '0.9rem' }}>
+        Want to sell? <Link to="/seller-register">Create a seller account</Link>
+      </p>
     </div>
   );
 }
