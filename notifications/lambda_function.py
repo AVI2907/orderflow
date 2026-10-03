@@ -74,7 +74,7 @@ def build_email(evt):
     items = evt.get("items") or []
 
     if status == "PAID":
-        intro = f"Thanks for your order! We've received your payment and the seller is preparing your package."
+        intro = "Thanks for your order! We've received your payment and the seller is preparing your package."
     elif status == "SHIPPED":
         intro = "Good news: your package has shipped."
     elif status == "DELIVERED":
