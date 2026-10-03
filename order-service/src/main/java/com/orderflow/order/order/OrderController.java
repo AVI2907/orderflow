@@ -44,6 +44,7 @@ public class OrderController {
 
         Order order = new Order();
         order.setBuyerId(UUID.fromString(user.buyerId()));
+        order.setBuyerEmail(user.email());
         order.setShippingAddress(req.shippingAddress().toEntity());
         Map<UUID, SellerOrder> sellerOrders = new LinkedHashMap<>();
 

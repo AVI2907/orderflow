@@ -115,8 +115,7 @@ public class StripePaymentService {
             OrderStatus oldStatus = so.getStatus();
             so.setStatus(OrderStatus.PAID);
             so.setPaidAt(Instant.now());
-            eventPublisher.publish(new OrderEvent(
-                    order.getId(), so.getId(), so.getSellerId(), oldStatus, OrderStatus.PAID, Instant.now()));
+            eventPublisher.publish(OrderEvent.of(order, so, oldStatus, OrderStatus.PAID));
         }
         order.setOverallStatus(order.computeOverallStatus());
         orderRepository.save(order);

@@ -100,9 +100,7 @@ public class SellerOrderController {
         order.setOverallStatus(order.computeOverallStatus());
         orderRepository.save(order);
 
-        eventPublisher.publish(new OrderEvent(
-                order.getId(), savedSellerOrder.getId(), savedSellerOrder.getSellerId(),
-                oldStatus, req.status(), Instant.now()));
+        eventPublisher.publish(OrderEvent.of(order, savedSellerOrder, oldStatus, req.status()));
 
         return ResponseEntity.ok(SellerOrderResponse.from(savedSellerOrder));
     }

@@ -26,6 +26,10 @@ public class Order {
     @Column(nullable = false)
     private UUID buyerId;
 
+    // Where order emails go (taken from the login at checkout)
+    @Column(length = 255)
+    private String buyerEmail;
+
     @Column(nullable = false)
     private BigDecimal totalAmount;
 

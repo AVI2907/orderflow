@@ -75,6 +75,6 @@ public class OrderCancellationService {
         so.setCancelledAt(now);
         so.setCancelledBy(cancelledBy);
         so.setRefundedAmount(refunded);
-        eventPublisher.publish(new OrderEvent(order.getId(), so.getId(), so.getSellerId(), oldStatus, OrderStatus.CANCELLED, now));
+        eventPublisher.publish(OrderEvent.of(order, so, oldStatus, OrderStatus.CANCELLED));
     }
 }
