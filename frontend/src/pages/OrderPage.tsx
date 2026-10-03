@@ -23,6 +23,9 @@ interface SellerOrder {
   paidAt?: string | null;
   shippedAt?: string | null;
   deliveredAt?: string | null;
+  cancelledAt?: string | null;
+  cancelledBy?: string | null;
+  refundedAmount?: number | null;
   createdAt: string;
 }
 
@@ -42,6 +45,9 @@ export function OrderPage() {
   const { orderId } = useParams();
   const [order, setOrder] = useState<Order | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -68,18 +74,34 @@ export function OrderPage() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [orderId]);
+  }, [orderId, reloadKey]);
+
+  async function cancel(sellerOrderId: string, confirmMessage: string) {
+    if (!window.confirm(confirmMessage)) return;
+    setActionError(null);
+    setBusyId(sellerOrderId);
+    try {
+      await orderApi.post(`/seller-orders/${sellerOrderId}/cancel`);
+      setReloadKey((k) => k + 1);
+    } catch (err: any) {
+      setActionError(err?.response?.data?.message || 'Could not cancel. Please try again.');
+    } finally {
+      setBusyId(null);
+    }
+  }
 
   if (error) return <p style={{ color: '#c0392b' }}>{error}</p>;
   if (!order) return <p>Loading...</p>;
 
   const awaitingPayment = order.overallStatus === 'PLACED';
+  const isCancelled = order.overallStatus === 'CANCELLED';
   const multiplePackages = order.sellerOrders.length > 1;
+  const firstUnpaid = order.sellerOrders.find((so) => so.status === 'PLACED');
 
   return (
     <div>
       <p><Link to="/my-orders">← My Orders</Link></p>
-      <h1>{awaitingPayment ? 'Confirming payment…' : 'Your order'}</h1>
+      <h1>{isCancelled ? 'Order cancelled' : awaitingPayment ? 'Confirming payment…' : 'Your order'}</h1>
       {awaitingPayment && (
         <p>
           This usually takes a few seconds. If you haven't paid yet,{' '}
@@ -91,6 +113,18 @@ export function OrderPage() {
       </p>
       <p style={{ fontWeight: 700, fontSize: '1.2rem' }}>Total: ${order.totalAmount.toFixed(2)}</p>
       <ShippingAddressView address={order.shippingAddress} />
+
+      {awaitingPayment && firstUnpaid && (
+        <button
+          className="btn-secondary btn-danger"
+          disabled={busyId !== null}
+          onClick={() => cancel(firstUnpaid.id, 'Cancel this unpaid order?')}
+        >
+          {busyId ? 'Cancelling...' : 'Cancel order'}
+        </button>
+      )}
+      {actionError && <p style={{ color: '#c0392b' }}>{actionError}</p>}
+
       {multiplePackages && (
         <p className="muted">This order ships in {order.sellerOrders.length} packages from different sellers.</p>
       )}
@@ -108,6 +142,9 @@ export function OrderPage() {
               carrier: so.carrier,
               trackingNumber: so.trackingNumber,
               trackingUrl: so.trackingUrl,
+              cancelledAt: so.cancelledAt,
+              cancelledBy: so.cancelledBy,
+              refundedAmount: so.refundedAmount,
             }}
           />
           {so.items.map((item) => (
@@ -116,6 +153,18 @@ export function OrderPage() {
             </p>
           ))}
           <p className="muted">Subtotal: ${so.subtotal.toFixed(2)}</p>
+
+          {so.status === 'PAID' && (
+            <button
+              className="btn-secondary btn-danger"
+              disabled={busyId !== null}
+              onClick={() =>
+                cancel(so.id, `Cancel ${multiplePackages ? 'this package' : 'this order'}? $${so.subtotal.toFixed(2)} will be refunded to your card.`)
+              }
+            >
+              {busyId === so.id ? 'Cancelling...' : multiplePackages ? 'Cancel this package' : 'Cancel order'}
+            </button>
+          )}
         </div>
       ))}
     </div>

@@ -18,6 +18,9 @@ public record SellerOrderResponse(
     Instant paidAt,
     Instant shippedAt,
     Instant deliveredAt,
+    Instant cancelledAt,
+    String cancelledBy,
+    BigDecimal refundedAmount,
     Instant createdAt
 ) {
     public static SellerOrderResponse from(SellerOrder so) {
@@ -35,6 +38,9 @@ public record SellerOrderResponse(
             so.getPaidAt(),
             so.getShippedAt(),
             so.getDeliveredAt(),
+            so.getCancelledAt(),
+            so.getCancelledBy(),
+            so.getRefundedAmount(),
             so.getCreatedAt()
         );
     }

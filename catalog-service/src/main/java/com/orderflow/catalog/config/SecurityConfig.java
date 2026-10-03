@@ -41,7 +41,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.PATCH, "/sellers/*/status").hasRole("ADMIN")
                 .requestMatchers(HttpMethod.GET, "/sellers").hasRole("ADMIN")
                 .requestMatchers("/error").permitAll()
-                .requestMatchers(HttpMethod.POST, "/internal/stock/deduct").permitAll()
+                .requestMatchers(HttpMethod.POST, "/internal/stock/*").permitAll()
                 .anyRequest().authenticated()
             )
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

@@ -51,6 +51,17 @@ public class SellerOrder {
     private Instant shippedAt;
     private Instant deliveredAt;
 
+    // Cancellation and refund details
+    private Instant cancelledAt;
+
+    @Column(length = 10)
+    private String cancelledBy;
+
+    @Column(length = 64)
+    private String refundId;
+
+    private BigDecimal refundedAmount;
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 

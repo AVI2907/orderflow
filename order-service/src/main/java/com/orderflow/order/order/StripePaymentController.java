@@ -68,7 +68,7 @@ public class StripePaymentController {
                 String orderId = intent.getMetadata().get("orderId");
                 Long received = intent.getAmountReceived();
                 if (orderId != null && received != null) {
-                    paymentService.markPaid(UUID.fromString(orderId), received);
+                    paymentService.markPaid(UUID.fromString(orderId), received, intent.getId());
                 }
             }
         }

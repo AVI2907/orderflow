@@ -26,11 +26,23 @@ public class StockController {
     public StockService.DeductResponse deduct(
             @RequestHeader(value = "X-Internal-Key", required = false) String providedKey,
             @Valid @RequestBody StockService.DeductRequest req) {
-        // Constant-time comparison, so the key can't be guessed from response timing
+        checkKey(providedKey);
+        return stockService.deduct(req);
+    }
+
+    @PostMapping("/restore")
+    public StockService.RestoreResponse restore(
+            @RequestHeader(value = "X-Internal-Key", required = false) String providedKey,
+            @Valid @RequestBody StockService.RestoreRequest req) {
+        checkKey(providedKey);
+        return stockService.restore(req);
+    }
+
+    // Constant-time comparison, so the key can't be guessed from response timing
+    private void checkKey(String providedKey) {
         if (apiKey.length == 0 || providedKey == null
                 || !MessageDigest.isEqual(apiKey, providedKey.getBytes(StandardCharsets.UTF_8))) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         }
-        return stockService.deduct(req);
     }
 }

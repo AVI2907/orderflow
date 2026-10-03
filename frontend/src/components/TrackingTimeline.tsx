@@ -13,6 +13,12 @@ export const CARRIER_NAMES: Record<string, string> = {
   OTHER: 'Other carrier',
 };
 
+const CANCELLED_BY: Record<string, string> = {
+  BUYER: 'by the buyer',
+  SELLER: 'by the seller',
+  ADMIN: 'by an administrator',
+};
+
 export interface TrackingInfo {
   status: string;
   placedAt?: string | null;
@@ -22,6 +28,9 @@ export interface TrackingInfo {
   carrier?: string | null;
   trackingNumber?: string | null;
   trackingUrl?: string | null;
+  cancelledAt?: string | null;
+  cancelledBy?: string | null;
+  refundedAmount?: number | null;
 }
 
 function formatDate(iso: string) {
@@ -31,7 +40,13 @@ function formatDate(iso: string) {
 /** Placed → Paid → Shipped → Delivered, with dates and the carrier's tracking link. */
 export function TrackingTimeline({ info }: { info: TrackingInfo }) {
   if (info.status === 'CANCELLED') {
-    return <p className="muted">This part of the order was cancelled.</p>;
+    return (
+      <div className="cancelled-box">
+        <strong>Cancelled</strong> {CANCELLED_BY[info.cancelledBy ?? ''] ?? ''}
+        {info.cancelledAt && <> on {formatDate(info.cancelledAt)}</>}.
+        {info.refundedAmount != null && <> ${Number(info.refundedAmount).toFixed(2)} was refunded to the original card.</>}
+      </div>
+    );
   }
 
   const current = STEPS.findIndex((s) => s.key === info.status);

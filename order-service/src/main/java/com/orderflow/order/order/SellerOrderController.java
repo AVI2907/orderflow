@@ -23,6 +23,9 @@ public class SellerOrderController {
     private final OrderRepository orderRepository;
     private final SqsEventPublisher eventPublisher;
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private OrderCancellationService cancellationService;
+
     public SellerOrderController(
             SellerOrderRepository sellerOrderRepository,
             OrderRepository orderRepository,
@@ -67,10 +70,10 @@ public class SellerOrderController {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
                     "Orders are marked paid automatically when payment succeeds");
         }
-        // Cancelling after payment must refund the buyer, which isn't supported yet
-        if (req.status() == OrderStatus.CANCELLED && oldStatus != OrderStatus.PLACED) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Paid orders can't be cancelled yet, because refunds aren't supported");
+        // Cancelling goes through the cancellation service, which restocks and refunds paid packages
+        if (req.status() == OrderStatus.CANCELLED) {
+            cancellationService.cancel(sellerOrder, isAdmin ? "ADMIN" : "SELLER");
+            return ResponseEntity.ok(SellerOrderResponse.from(sellerOrder));
         }
 
         if (req.status() == OrderStatus.SHIPPED) {
@@ -102,6 +105,26 @@ public class SellerOrderController {
                 oldStatus, req.status(), Instant.now()));
 
         return ResponseEntity.ok(SellerOrderResponse.from(savedSellerOrder));
+    }
+
+    /** Cancel one package before it ships. Allowed for the buyer, the package's seller, or an admin. */
+    @PostMapping("/{id}/cancel")
+    public ResponseEntity<SellerOrderResponse> cancel(@PathVariable UUID id, Authentication authentication) {
+        SellerOrder sellerOrder = sellerOrderRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found"));
+        boolean isAdmin = authentication.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .anyMatch(a -> a.equals("ROLE_ADMIN"));
+        AuthenticatedUser user = authentication.getPrincipal() instanceof AuthenticatedUser u ? u : null;
+        boolean isSeller = user != null && user.sellerId() != null
+                && user.sellerId().equals(sellerOrder.getSellerId().toString());
+        boolean isBuyer = user != null && user.buyerId() != null
+                && user.buyerId().equals(sellerOrder.getOrder().getBuyerId().toString());
+        if (!isAdmin && !isSeller && !isBuyer) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found");
+        }
+        cancellationService.cancel(sellerOrder, isAdmin ? "ADMIN" : isSeller ? "SELLER" : "BUYER");
+        return ResponseEntity.ok(SellerOrderResponse.from(sellerOrder));
     }
 
     @GetMapping("/seller/{sellerId}")

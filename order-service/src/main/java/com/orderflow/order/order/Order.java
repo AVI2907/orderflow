@@ -32,6 +32,10 @@ public class Order {
     @Embedded
     private ShippingAddress shippingAddress;
 
+    // The Stripe payment for this order, needed to issue refunds
+    @Column(length = 64)
+    private String paymentIntentId;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private OrderStatus overallStatus;

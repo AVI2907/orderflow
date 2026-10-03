@@ -16,7 +16,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
 
-/** Talks to catalog-service: authoritative product data, and stock deduction after payment. */
+/** Talks to catalog-service: authoritative product data, and stock changes after payment or cancellation. */
 @Component
 public class CatalogClient {
 
@@ -28,6 +28,7 @@ public class CatalogClient {
 
     public record StockLine(UUID productId, int quantity) {}
     public record DeductRequest(UUID orderId, List<StockLine> items) {}
+    public record RestoreRequest(UUID referenceId, List<StockLine> items) {}
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record DeductResponse(boolean alreadyProcessed, List<UUID> oversold) {}
@@ -68,9 +69,7 @@ public class CatalogClient {
      * Returns the products that didn't have enough stock left.
      */
     public List<UUID> deductStock(UUID orderId, List<StockLine> items) {
-        if (internalApiKey.isBlank()) {
-            throw new IllegalStateException("internal.api-key is not configured");
-        }
+        requireKey();
         DeductResponse response = restClient.post()
                 .uri("/internal/stock/deduct")
                 .header("X-Internal-Key", internalApiKey)
@@ -79,5 +78,28 @@ public class CatalogClient {
                 .retrieve()
                 .body(DeductResponse.class);
         return response == null || response.oversold() == null ? List.of() : response.oversold();
+    }
+
+    /** Puts stock back for a cancelled package. Safe to call more than once with the same referenceId. */
+    public void restoreStock(UUID referenceId, List<StockLine> items) {
+        requireKey();
+        try {
+            restClient.post()
+                    .uri("/internal/stock/restore")
+                    .header("X-Internal-Key", internalApiKey)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(new RestoreRequest(referenceId, items))
+                    .retrieve()
+                    .toBodilessEntity();
+        } catch (RestClientException e) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                    "Could not update stock right now. Please try again.", e);
+        }
+    }
+
+    private void requireKey() {
+        if (internalApiKey.isBlank()) {
+            throw new IllegalStateException("internal.api-key is not configured");
+        }
     }
 }

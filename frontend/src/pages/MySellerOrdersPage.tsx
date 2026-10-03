@@ -24,6 +24,9 @@ interface SellerOrder {
   paidAt?: string | null;
   shippedAt?: string | null;
   deliveredAt?: string | null;
+  cancelledAt?: string | null;
+  cancelledBy?: string | null;
+  refundedAmount?: number | null;
   createdAt: string;
 }
 
@@ -72,6 +75,20 @@ export function MySellerOrdersPage() {
     }
   }
 
+  async function cancelOrder(o: SellerOrder) {
+    if (!window.confirm(`Cancel this order? The buyer will be refunded $${o.subtotal.toFixed(2)} and the items go back into your stock.`)) return;
+    setError(null);
+    setBusyId(o.id);
+    try {
+      await orderApi.post(`/seller-orders/${o.id}/cancel`);
+      loadOrders();
+    } catch (err: any) {
+      setError(err?.response?.data?.message || 'Could not cancel this order.');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   if (!sellerId) {
     return <p>Log in as a seller to view your orders.</p>;
   }
@@ -100,6 +117,9 @@ export function MySellerOrdersPage() {
                 carrier: o.carrier,
                 trackingNumber: o.trackingNumber,
                 trackingUrl: o.trackingUrl,
+                cancelledAt: o.cancelledAt,
+                cancelledBy: o.cancelledBy,
+                refundedAmount: o.refundedAmount,
               }}
             />
 
@@ -112,6 +132,11 @@ export function MySellerOrdersPage() {
             <p className="muted">Subtotal: ${o.subtotal.toFixed(2)}</p>
 
             {o.status === 'PLACED' && <p className="muted">Waiting for the buyer to pay.</p>}
+            {o.status === 'PAID' && (
+              <button className="btn-secondary btn-danger" disabled={busy} onClick={() => cancelOrder(o)} style={{ marginTop: '0.5rem' }}>
+                Cancel and refund
+              </button>
+            )}
 
             {o.status === 'PAID' && (
               <form
