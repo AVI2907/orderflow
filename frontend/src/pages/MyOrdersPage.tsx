@@ -14,6 +14,8 @@ interface SellerOrder {
   id: string;
   status: string;
   items: OrderItem[];
+  shippedAt?: string | null;
+  deliveredAt?: string | null;
 }
 
 interface Order {
@@ -31,6 +33,20 @@ const STATUS_LABELS: Record<string, string> = {
   DELIVERED: 'Delivered',
   CANCELLED: 'Cancelled',
 };
+
+function shortDate(iso: string) {
+  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+/** e.g. "Shipped Oct 3" or "Delivered Oct 5", using the latest date across the order's packages. */
+function statusText(order: Order): string {
+  const label = STATUS_LABELS[order.overallStatus] ?? order.overallStatus;
+  const dates = order.sellerOrders
+    .map((so) => (order.overallStatus === 'DELIVERED' ? so.deliveredAt : order.overallStatus === 'SHIPPED' ? so.shippedAt : null))
+    .filter((d): d is string => !!d)
+    .sort();
+  return dates.length ? `${label} ${shortDate(dates[dates.length - 1])}` : label;
+}
 
 export function MyOrdersPage() {
   const { buyerId } = useAuth();
@@ -75,7 +91,7 @@ export function MyOrdersPage() {
               <span className="muted">
                 {new Date(order.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
               </span>
-              <span className="status-pill">{STATUS_LABELS[order.overallStatus] ?? order.overallStatus}</span>
+              <span className="status-pill">{statusText(order)}</span>
             </div>
 
             <ul className="order-card-items">

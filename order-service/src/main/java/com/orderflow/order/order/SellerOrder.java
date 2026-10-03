@@ -39,6 +39,18 @@ public class SellerOrder {
     @OneToMany(mappedBy = "sellerOrder", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<OrderItem> items = new ArrayList<>();
 
+    // Shipping details, filled in when the seller marks this part of the order as shipped
+    @Column(length = 20)
+    private String carrier;
+
+    @Column(length = 64)
+    private String trackingNumber;
+
+    // When each step happened (empty for steps not reached yet, and for orders older than this feature)
+    private Instant paidAt;
+    private Instant shippedAt;
+    private Instant deliveredAt;
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 

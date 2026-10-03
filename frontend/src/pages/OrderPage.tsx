@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { orderApi } from '../api/client';
 import { ShippingAddressView, type ShippingAddress } from '../components/ShippingAddressView';
+import { TrackingTimeline } from '../components/TrackingTimeline';
 
 interface OrderItem {
   id: string;
@@ -16,6 +17,13 @@ interface SellerOrder {
   subtotal: number;
   status: string;
   items: OrderItem[];
+  carrier?: string | null;
+  trackingNumber?: string | null;
+  trackingUrl?: string | null;
+  paidAt?: string | null;
+  shippedAt?: string | null;
+  deliveredAt?: string | null;
+  createdAt: string;
 }
 
 interface Order {
@@ -24,6 +32,7 @@ interface Order {
   overallStatus: string;
   sellerOrders: SellerOrder[];
   shippingAddress?: ShippingAddress | null;
+  createdAt: string;
 }
 
 const POLL_INTERVAL_MS = 2000;
@@ -65,28 +74,48 @@ export function OrderPage() {
   if (!order) return <p>Loading...</p>;
 
   const awaitingPayment = order.overallStatus === 'PLACED';
+  const multiplePackages = order.sellerOrders.length > 1;
 
   return (
     <div>
-      <h1>{awaitingPayment ? 'Confirming payment…' : 'Order Confirmed'}</h1>
+      <p><Link to="/my-orders">← My Orders</Link></p>
+      <h1>{awaitingPayment ? 'Confirming payment…' : 'Your order'}</h1>
       {awaitingPayment && (
         <p>
           This usually takes a few seconds. If you haven't paid yet,{' '}
           <Link to={`/checkout/${order.id}`}>complete your payment</Link>.
         </p>
       )}
-      <p>Order ID: {order.id}</p>
-      <p>Overall status: <span className="status-pill">{order.overallStatus}</span></p>
+      <p className="muted">
+        Placed {new Date(order.createdAt).toLocaleString()} · Order {order.id}
+      </p>
       <p style={{ fontWeight: 700, fontSize: '1.2rem' }}>Total: ${order.totalAmount.toFixed(2)}</p>
       <ShippingAddressView address={order.shippingAddress} />
+      {multiplePackages && (
+        <p className="muted">This order ships in {order.sellerOrders.length} packages from different sellers.</p>
+      )}
 
-      {order.sellerOrders.map((so) => (
+      {order.sellerOrders.map((so, i) => (
         <div key={so.id} className="order-box">
-          <p>Seller sub-order — status: <span className="status-pill">{so.status}</span></p>
+          {multiplePackages && <h3>Package {i + 1}</h3>}
+          <TrackingTimeline
+            info={{
+              status: so.status,
+              placedAt: so.createdAt,
+              paidAt: so.paidAt,
+              shippedAt: so.shippedAt,
+              deliveredAt: so.deliveredAt,
+              carrier: so.carrier,
+              trackingNumber: so.trackingNumber,
+              trackingUrl: so.trackingUrl,
+            }}
+          />
           {so.items.map((item) => (
-            <p key={item.id}>{item.productName} x{item.quantity} — ${(item.unitPrice * item.quantity).toFixed(2)}</p>
+            <p key={item.id}>
+              {item.productName} × {item.quantity} — ${(item.unitPrice * item.quantity).toFixed(2)}
+            </p>
           ))}
-          <p>Subtotal: ${so.subtotal.toFixed(2)}</p>
+          <p className="muted">Subtotal: ${so.subtotal.toFixed(2)}</p>
         </div>
       ))}
     </div>

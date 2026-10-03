@@ -62,6 +62,34 @@ public class SellerOrderController {
                     "Cannot transition from " + oldStatus + " to " + req.status());
         }
 
+        // Only Stripe's verified webhook may mark an order as paid
+        if (req.status() == OrderStatus.PAID) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Orders are marked paid automatically when payment succeeds");
+        }
+        // Cancelling after payment must refund the buyer, which isn't supported yet
+        if (req.status() == OrderStatus.CANCELLED && oldStatus != OrderStatus.PLACED) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Paid orders can't be cancelled yet, because refunds aren't supported");
+        }
+
+        if (req.status() == OrderStatus.SHIPPED) {
+            String carrier = req.carrier() == null ? "" : req.carrier().trim().toUpperCase();
+            String tracking = req.trackingNumber() == null ? "" : req.trackingNumber().trim();
+            if (!TrackingLinks.CARRIERS.contains(carrier)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Choose a carrier: UPS, USPS, FedEx, DHL or Other");
+            }
+            if (!tracking.matches("[A-Za-z0-9 -]{4,64}")) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Enter a valid tracking number");
+            }
+            sellerOrder.setCarrier(carrier);
+            sellerOrder.setTrackingNumber(tracking);
+            sellerOrder.setShippedAt(Instant.now());
+        } else if (req.status() == OrderStatus.DELIVERED) {
+            sellerOrder.setDeliveredAt(Instant.now());
+        }
+
         sellerOrder.setStatus(req.status());
         SellerOrder savedSellerOrder = sellerOrderRepository.save(sellerOrder);
 

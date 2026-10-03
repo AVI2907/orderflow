@@ -12,6 +12,12 @@ public record SellerOrderResponse(
     OrderStatus status,
     ShippingAddress shippingAddress,
     List<OrderItemResponse> items,
+    String carrier,
+    String trackingNumber,
+    String trackingUrl,
+    Instant paidAt,
+    Instant shippedAt,
+    Instant deliveredAt,
     Instant createdAt
 ) {
     public static SellerOrderResponse from(SellerOrder so) {
@@ -23,6 +29,12 @@ public record SellerOrderResponse(
             // Sellers need to know where to ship their part of the order
             so.getOrder().getShippingAddress(),
             so.getItems().stream().map(OrderItemResponse::from).toList(),
+            so.getCarrier(),
+            so.getTrackingNumber(),
+            TrackingLinks.url(so.getCarrier(), so.getTrackingNumber()),
+            so.getPaidAt(),
+            so.getShippedAt(),
+            so.getDeliveredAt(),
             so.getCreatedAt()
         );
     }

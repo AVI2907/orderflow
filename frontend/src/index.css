@@ -362,3 +362,24 @@ input:focus {
 }
 .order-card-items { margin: 0.75rem 0; padding-left: 1.25rem; }
 .order-card-links { display: flex; gap: 1rem; }
+
+/* Order tracking timeline */
+.timeline { list-style: none; display: flex; padding: 0; margin: 1rem 0; }
+.timeline li {
+  flex: 1; position: relative; text-align: center;
+  display: flex; flex-direction: column; align-items: center; gap: 0.25rem;
+  font-size: 0.8rem; color: #999;
+}
+.timeline li::before {
+  content: ''; position: absolute; top: 7px; left: -50%;
+  width: 100%; height: 2px; background: #ddd; z-index: 0;
+}
+.timeline li:first-child::before { display: none; }
+.timeline li.done { color: inherit; }
+.timeline li.done::before { background: #2e7d32; }
+.timeline .dot { width: 16px; height: 16px; border-radius: 50%; background: #ddd; position: relative; z-index: 1; }
+.timeline li.done .dot { background: #2e7d32; }
+.step-label { font-weight: 600; }
+.step-date { color: #777; font-size: 0.75rem; }
+.tracking-number { font-size: 0.9rem; }
+.ship-form { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-top: 0.75rem; }
