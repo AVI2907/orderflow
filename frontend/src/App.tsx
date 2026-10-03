@@ -5,6 +5,7 @@ import { CartProvider, useCart } from './context/CartContext';
 import { isTokenValid } from './utils/jwt';
 import { ProductsPage } from './pages/ProductsPage';
 import { ProductDetailPage } from './pages/ProductDetailPage';
+import { MyOrdersPage } from './pages/MyOrdersPage';
 import { LoginPage } from './pages/LoginPage';
 import { BuyerRegisterPage } from './pages/BuyerRegisterPage';
 import { CartPage } from './pages/CartPage';
@@ -24,7 +25,7 @@ function RequireAuth({ children }: { children: ReactNode }) {
 }
 
 function Nav() {
-  const { token, email, sellerId, logout } = useAuth();
+  const { token, email, buyerId, sellerId, logout } = useAuth();
   const { items } = useCart();
   const itemCount = items.reduce((sum, i) => sum + i.quantity, 0);
   const loggedIn = isTokenValid(token);
@@ -36,6 +37,7 @@ function Nav() {
         <>
           <Link to="/">Products</Link>
           <Link to="/cart">Cart ({itemCount})</Link>
+          {buyerId && <Link to="/my-orders">My Orders</Link>}
           {sellerId && (
             <>
               <Link to="/seller/products">My Products</Link>
@@ -75,6 +77,7 @@ function App() {
               {/* Everything else requires login */}
               <Route path="/" element={protect(<ProductsPage />)} />
               <Route path="/item/:productId" element={protect(<ProductDetailPage />)} />
+              <Route path="/my-orders" element={protect(<MyOrdersPage />)} />
               <Route path="/cart" element={protect(<CartPage />)} />
               <Route path="/checkout/:orderId" element={protect(<PaymentPage />)} />
               <Route path="/order/:orderId" element={protect(<OrderPage />)} />
