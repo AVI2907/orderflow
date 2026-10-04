@@ -45,6 +45,9 @@ public class ProductController {
     private final SellerRepository sellerRepository;
     private final ReviewRepository reviewRepository;
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private ProductSearchRepository searchRepository;
+
     public ProductController(ProductRepository productRepository, SellerRepository sellerRepository,
                              ReviewRepository reviewRepository) {
         this.productRepository = productRepository;
@@ -74,13 +77,54 @@ public class ProductController {
         return ResponseEntity.ok(ProductResponse.from(saved));
     }
 
+    /** Store search: text, category, price range, in-stock filter and sorting. Only approved sellers' products. */
     @GetMapping
-    public List<ProductResponse> list() {
+    public List<ProductResponse> list(@RequestParam(required = false) String q,
+                                      @RequestParam(required = false) String category,
+                                      @RequestParam(required = false) java.math.BigDecimal minPrice,
+                                      @RequestParam(required = false) java.math.BigDecimal maxPrice,
+                                      @RequestParam(defaultValue = "false") boolean inStock,
+                                      @RequestParam(defaultValue = "newest") String sort) {
+        String text = q == null ? "" : q.trim().toLowerCase();
+        if (text.length() > 100) text = text.substring(0, 100);
+        // Escape LIKE wildcards, so searching for "50%" means the literal text "50%"
+        String pattern = "%" + text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%";
+        String cat = category == null ? "" : category.trim().toLowerCase();
+        java.math.BigDecimal min = minPrice == null || minPrice.signum() < 0 ? java.math.BigDecimal.ZERO : minPrice;
+        java.math.BigDecimal max = maxPrice == null ? new java.math.BigDecimal("999999999") : maxPrice;
+
+        org.springframework.data.domain.Sort order = switch (sort) {
+            case "price_asc" -> org.springframework.data.domain.Sort.by("price").ascending();
+            case "price_desc" -> org.springframework.data.domain.Sort.by("price").descending();
+            case "name" -> org.springframework.data.domain.Sort.by("name").ascending();
+            default -> org.springframework.data.domain.Sort.by("createdAt").descending();
+        };
+
         Map<UUID, RatingSummary> ratings = ratingSummaries();
-        return productRepository.findAll().stream()
-            .filter(p -> p.getSeller().getStatus() == SellerStatus.APPROVED) // hide pending/suspended sellers
+        List<ProductResponse> results = searchRepository
+            .search(pattern, cat, min, max, inStock ? 1 : 0, SellerStatus.APPROVED, order).stream()
             .map(p -> ProductResponse.from(p, ratings.getOrDefault(p.getId(), RatingSummary.NONE)))
             .toList();
+
+        if ("rating".equals(sort)) {
+            // Highest average first; more reviews breaks ties
+            results = results.stream()
+                .sorted(java.util.Comparator.comparingDouble(ProductResponse::averageRating)
+                    .thenComparingLong(ProductResponse::reviewCount)
+                    .reversed())
+                .toList();
+        }
+        return results;
+    }
+
+    /** Distinct categories in the store, for the filter dropdown (case-insensitive duplicates merged). */
+    @GetMapping("/categories")
+    public List<String> categories() {
+        java.util.Map<String, String> unique = new java.util.LinkedHashMap<>();
+        for (String c : searchRepository.categories(SellerStatus.APPROVED)) {
+            unique.putIfAbsent(c.trim().toLowerCase(), c.trim());
+        }
+        return List.copyOf(unique.values());
     }
 
     @GetMapping("/{id}")
