@@ -28,6 +28,13 @@ public class Buyer {
     @Column(nullable = false)
     private String name;
 
+    @Column(length = 30)
+    private String phone;
+
+    // Default delivery address for pre-filling checkout (empty until the buyer saves one)
+    @Embedded
+    private BuyerAddress defaultAddress;
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 
