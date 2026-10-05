@@ -6,6 +6,7 @@ import { isTokenValid } from './utils/jwt';
 import { ProductsPage } from './pages/ProductsPage';
 import { ProductDetailPage } from './pages/ProductDetailPage';
 import { MyOrdersPage } from './pages/MyOrdersPage';
+import { ProfilePage } from './pages/ProfilePage';
 import { SellerRegisterPage } from './pages/SellerRegisterPage';
 import { AdminPage } from './pages/AdminPage';
 import { LoginPage } from './pages/LoginPage';
@@ -41,6 +42,7 @@ function Nav() {
           <Link to="/cart">Cart ({itemCount})</Link>
           {role === 'ADMIN' && <Link to="/admin">Admin</Link>}
           {buyerId && <Link to="/my-orders">My Orders</Link>}
+          {buyerId && <Link to="/profile">Profile</Link>}
           {sellerId && (
             <>
               <Link to="/seller/products">My Products</Link>
@@ -83,6 +85,7 @@ function App() {
               <Route path="/item/:productId" element={protect(<ProductDetailPage />)} />
               <Route path="/admin" element={protect(<AdminPage />)} />
               <Route path="/my-orders" element={protect(<MyOrdersPage />)} />
+              <Route path="/profile" element={protect(<ProfilePage />)} />
               <Route path="/cart" element={protect(<CartPage />)} />
               <Route path="/checkout/:orderId" element={protect(<PaymentPage />)} />
               <Route path="/order/:orderId" element={protect(<OrderPage />)} />

@@ -420,3 +420,11 @@ input:focus {
 
 /* Cancelled packages */
 .cancelled-box { background: #f5f5f5; border-left: 4px solid #999; padding: 0.6rem 0.9rem; margin: 0.75rem 0; font-size: 0.9rem; }
+
+/* Profile page and checkout extras */
+.profile-page { max-width: 640px; }
+.profile-page .order-box { margin-top: 1.5rem; }
+.profile-page h3 { margin: 1rem 0 0; }
+.form-ok { color: #2e7d32; }
+.form-error { color: #c0392b; }
+.checkout-form label.checkbox-row { flex-direction: row; align-items: center; gap: 0.5rem; font-weight: 400; }
